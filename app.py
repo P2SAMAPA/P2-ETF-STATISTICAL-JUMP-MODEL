@@ -27,43 +27,53 @@ SIGNAL_COLOURS = {"Low": "#E74C3C", "Mid": "#F39C12", "High": "#27AE60"}
 # ── Data loading ──────────────────────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner="Loading latest SJM results…")
 def load_latest() -> dict | None:
+    # HF public dataset — no auth needed for reading
+    base_api = f"https://huggingface.co/api/datasets/{config.HF_OUTPUT_REPO}/tree/main"
+    base_raw = f"https://huggingface.co/datasets/{config.HF_OUTPUT_REPO}/resolve/main"
+    headers = {"Authorization": f"Bearer {config.HF_TOKEN}"} if config.HF_TOKEN else {}
+
     try:
-        headers = (
-            {"Authorization": f"Bearer {config.HF_TOKEN}"} if config.HF_TOKEN else {}
-        )
-        api_url = (
-            f"https://huggingface.co/api/datasets/{config.HF_OUTPUT_REPO}/tree/main"
-        )
-        resp = requests.get(api_url, headers=headers, timeout=30)
+        resp = requests.get(base_api, headers=headers, timeout=30)
+        if resp.status_code == 404:
+            return None  # repo doesn't exist yet
         resp.raise_for_status()
+    except requests.exceptions.RequestException:
+        return None
+
+    try:
         all_files = sorted(
             [f["path"] for f in resp.json() if f["path"].endswith(".json")]
         )
-        if not all_files:
-            return None
+    except Exception:
+        return None
 
-        # Latest file per universe slug
-        universe_files: dict[str, str] = {}
-        for path in all_files:
-            name = path.split("/")[-1]
-            parts = name.replace(".json", "").split("_")
-            slug = parts[-1] if len(parts) >= 3 else "all"
-            universe_files[slug] = path
+    if not all_files:
+        return None
 
-        base = f"https://huggingface.co/datasets/{config.HF_OUTPUT_REPO}/resolve/main"
-        merged: dict = {}
-        run_date = "unknown"
-        for slug, path in universe_files.items():
-            r = requests.get(f"{base}/{path}", headers=headers, timeout=60)
+    # Latest file per universe slug
+    universe_files: dict[str, str] = {}
+    for path in all_files:
+        name = path.split("/")[-1]
+        parts = name.replace(".json", "").split("_")
+        slug = parts[-1] if len(parts) >= 3 else "all"
+        universe_files[slug] = path  # keeps latest (sorted)
+
+    merged: dict = {}
+    run_date = "unknown"
+    for slug, path in universe_files.items():
+        try:
+            r = requests.get(f"{base_raw}/{path}", headers=headers, timeout=60)
             r.raise_for_status()
             data = r.json()
             run_date = data.get("run_date", run_date)
             merged.update(data.get("universes", {}))
+        except Exception:
+            continue  # skip bad files, keep loading others
 
-        return {"run_date": run_date, "universes": merged}
-    except Exception as e:
-        st.error(f"Failed to load results: {e}")
+    if not merged:
         return None
+
+    return {"run_date": run_date, "universes": merged}
 
 
 def regime_badge(regime_id: int) -> str:
