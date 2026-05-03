@@ -9,7 +9,7 @@ from us_calendar import next_trading_day
 
 st.set_page_config(page_title="Statistical Jump Model", layout="wide")
 st.title("📊 Statistical Jump Model (SJM)")
-st.caption("Regime detection with persistence | Convex relaxation | Nystrup et al. (2020)")
+st.caption("Regime detection with persistence | Returns‑chasing recommendation")
 
 @st.cache_data(ttl=3600)
 def load_latest():
@@ -42,28 +42,33 @@ st.sidebar.write(f"**Next trading day:** {next_trading_day()}")
 
 universes = data['universes']
 
-# Score function
-def compute_score(info):
-    avg_dur = max(info["average_duration_days"], 1)
-    curr_dur = max(info["current_duration_days"], 1)
-    return info["current_regime"] * (1 + np.log(curr_dur / avg_dur))
-
+# For each universe, pick ticker with highest expected return from its current regime
 recommendations = {}
 for universe_name, uni_data in universes.items():
     if not uni_data:
         continue
-    best_ticker = max(uni_data.items(), key=lambda x: compute_score(x[1]))
-    best_score = compute_score(best_ticker[1])
-    recommendations[universe_name] = (best_ticker[0], best_ticker[1], best_score)
+    best_ticker = None
+    best_expected_return = -np.inf
+    best_info = None
+    for ticker, info in uni_data.items():
+        curr_reg = info["current_regime"]
+        exp_return = info.get("regime_returns", {}).get(curr_reg, 0.0)
+        if exp_return > best_expected_return:
+            best_expected_return = exp_return
+            best_ticker = ticker
+            best_info = info
+    if best_ticker:
+        recommendations[universe_name] = (best_ticker, best_info, best_expected_return)
 
 st.header("🎯 Top ETF Recommendation for Next Trading Day")
-for universe, (ticker, info, score) in recommendations.items():
+for universe, (ticker, info, exp_return) in recommendations.items():
     st.markdown(f"### {universe}")
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     col1.metric("ETF", ticker)
     col2.metric("Current Regime", info["current_regime"])
     col3.metric("Regime Duration (days)", info["current_duration_days"])
-    st.caption(f"Regime strength score: {score:.2f} (higher = stronger buy signal)")
+    col4.metric("Expected Annual Return", f"{exp_return:.1%}")
+    st.caption("Based on average historical return of the current regime.")
 
     # Timeline plot with dates
     dates = pd.to_datetime(info["dates"])
@@ -82,12 +87,12 @@ for universe, (ticker, info, score) in recommendations.items():
         xaxis_title="Date",
         yaxis_title="Regime (0=low, 1=mid, 2=high)",
         height=400,
-        xaxis=dict(tickformat="%Y", dtick="M12")  # show years
+        xaxis=dict(tickformat="%Y", dtick="M12")
     )
     st.plotly_chart(fig, use_container_width=True, key=f"regime_plot_{universe}")
     st.divider()
 
-# Optional: full table
+# Optional full table
 with st.expander("📋 Full Table (All Tickers)"):
     for universe_name, uni_data in universes.items():
         if not uni_data:
@@ -95,14 +100,16 @@ with st.expander("📋 Full Table (All Tickers)"):
         st.subheader(universe_name)
         rows = []
         for ticker, info in uni_data.items():
+            curr_reg = info["current_regime"]
+            exp_return = info.get("regime_returns", {}).get(curr_reg, 0.0)
             rows.append({
                 "Ticker": ticker,
-                "Current Regime": info["current_regime"],
+                "Current Regime": curr_reg,
                 "Current Duration": info["current_duration_days"],
-                "Avg Duration": info["average_duration_days"],
+                "Expected Return": f"{exp_return:.1%}",
                 "Total Regimes": info["total_regimes"]
             })
-        df = pd.DataFrame(rows).sort_values("Current Regime", ascending=False)
+        df = pd.DataFrame(rows).sort_values("Expected Return", ascending=False)
         st.dataframe(df, use_container_width=True)
 
-st.caption("Method: Convex trend filtering with persistence penalty. Recommendation = highest current regime × log duration score.")
+st.caption("Method: Convex trend filtering. Recommendation = ticker with highest historical return for its current regime.")
