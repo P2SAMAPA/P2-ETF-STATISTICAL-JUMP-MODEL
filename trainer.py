@@ -40,15 +40,17 @@ def main():
             )
             model.fit(series.values)
 
+            # Convert log returns to simple returns
+            simple_returns = np.exp(series.values) - 1.0
             # Compute average simple return per regime (annualised)
-            simple_returns = np.exp(series.values) - 1.0   # convert log to simple
             regime_returns = {}
             for regime_id in set(model.regime_labels_):
                 mask = model.regime_labels_ == regime_id
                 avg_daily_simple = simple_returns[mask].mean()
-                # Annualise: multiply by 252 trading days
-                annual_return = avg_daily_simple * 252
-                regime_returns[int(regime_id)] = annual_return
+                # Annualise: multiply by 252 (trading days)
+                annual_return = avg_daily_simple * 252.0
+                regime_returns[int(regime_id)] = float(annual_return)
+                print(f"      Regime {regime_id}: avg daily simple = {avg_daily_simple:.6f}, annual = {annual_return:.4f}")
 
             # Build output
             transitions_dates = []
