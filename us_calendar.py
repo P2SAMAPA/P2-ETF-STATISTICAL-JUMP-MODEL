@@ -1,11 +1,16 @@
+"""us_calendar.py — NYSE trading calendar utilities."""
+
 import pandas as pd
-from pandas.tseries.holiday import USFederalHolidayCalendar, GoodFriday
+from pandas.tseries.holiday import GoodFriday, USFederalHolidayCalendar
 from pandas.tseries.offsets import CustomBusinessDay
+
 
 class NYSECalendar(USFederalHolidayCalendar):
     rules = USFederalHolidayCalendar.rules + [GoodFriday]
 
+
 nyse_bd = CustomBusinessDay(calendar=NYSECalendar())
+
 
 def next_trading_day(from_date=None):
     if from_date is None:
