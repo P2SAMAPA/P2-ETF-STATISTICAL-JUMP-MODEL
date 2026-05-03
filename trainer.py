@@ -1,6 +1,6 @@
 """
 Main trainer: for each universe, for each ticker, fit SJM and collect results.
-Now also stores the full date index for plotting.
+Also computes average return per regime for return chasing.
 """
 
 import pandas as pd
@@ -40,7 +40,16 @@ def main():
             )
             model.fit(series.values)
 
-            # Build output for this ticker
+            # Compute average return per regime (annualised, simple)
+            regime_returns = {}
+            for regime_id in set(model.regime_labels_):
+                mask = model.regime_labels_ == regime_id
+                avg_daily = series.values[mask].mean()
+                # Annualise (252 trading days)
+                annual_return = (1 + avg_daily) ** 252 - 1
+                regime_returns[int(regime_id)] = annual_return
+
+            # Build output
             transitions_dates = []
             for idx, new_reg in model.get_transitions():
                 date = series.index[idx].strftime("%Y-%m-%d")
@@ -52,8 +61,9 @@ def main():
                 "total_regimes": len(model.durations_),
                 "average_duration_days": int(np.mean(model.durations_)),
                 "regime_sequence": [int(l) for l in model.regime_labels_],
-                "dates": [d.strftime("%Y-%m-%d") for d in series.index],  # store full date list
-                "transition_points": transitions_dates
+                "dates": [d.strftime("%Y-%m-%d") for d in series.index],
+                "transition_points": transitions_dates,
+                "regime_returns": regime_returns   # new field
             }
 
         all_results[universe_name] = universe_results
