@@ -1,5 +1,6 @@
 """
 Main trainer: for each universe, for each ticker, fit SJM and collect results.
+Now also stores the full date index for plotting.
 """
 
 import pandas as pd
@@ -26,7 +27,7 @@ def main():
         universe_results = {}
         for ticker in returns.columns:
             print(f"  Processing {ticker}...")
-            series = returns[ticker].dropna().values
+            series = returns[ticker].dropna()
             if len(series) < config.MIN_REGIME_DAYS:
                 continue
 
@@ -37,12 +38,12 @@ def main():
                 transition_threshold=config.TRANSITION_THRESHOLD,
                 vol_window=config.VOL_WINDOW
             )
-            model.fit(series)
+            model.fit(series.values)
 
             # Build output for this ticker
             transitions_dates = []
             for idx, new_reg in model.get_transitions():
-                date = returns.index[idx].strftime("%Y-%m-%d")
+                date = series.index[idx].strftime("%Y-%m-%d")
                 transitions_dates.append({"date": date, "new_regime": int(new_reg)})
 
             universe_results[ticker] = {
@@ -51,6 +52,7 @@ def main():
                 "total_regimes": len(model.durations_),
                 "average_duration_days": int(np.mean(model.durations_)),
                 "regime_sequence": [int(l) for l in model.regime_labels_],
+                "dates": [d.strftime("%Y-%m-%d") for d in series.index],  # store full date list
                 "transition_points": transitions_dates
             }
 
