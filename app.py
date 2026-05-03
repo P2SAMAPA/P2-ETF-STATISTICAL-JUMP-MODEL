@@ -52,7 +52,7 @@ for universe_name, uni_data in universes.items():
     best_info = None
     for ticker, info in uni_data.items():
         curr_reg = info["current_regime"]
-        exp_return = info.get("regime_returns", {}).get(curr_reg, 0.0)
+        exp_return = info.get("regime_returns", {}).get(curr_reg, -np.inf)
         if exp_return > best_expected_return:
             best_expected_return = exp_return
             best_ticker = ticker
@@ -67,8 +67,9 @@ for universe, (ticker, info, exp_return) in recommendations.items():
     col1.metric("ETF", ticker)
     col2.metric("Current Regime", info["current_regime"])
     col3.metric("Regime Duration (days)", info["current_duration_days"])
-    col4.metric("Expected Annual Return", f"{exp_return:.1%}")
-    st.caption("Based on average historical return of the current regime.")
+    # Display percentage with 2 decimal places (e.g., 0.05%)
+    col4.metric("Expected Annual Return", f"{exp_return*100:.2f}%")
+    st.caption("Annualised simple return (mean daily × 252) for the current regime.")
 
     # Timeline plot with dates
     dates = pd.to_datetime(info["dates"])
@@ -106,10 +107,10 @@ with st.expander("📋 Full Table (All Tickers)"):
                 "Ticker": ticker,
                 "Current Regime": curr_reg,
                 "Current Duration": info["current_duration_days"],
-                "Expected Return": f"{exp_return:.1%}",
+                "Exp. Annual Return": f"{exp_return*100:.2f}%",
                 "Total Regimes": info["total_regimes"]
             })
-        df = pd.DataFrame(rows).sort_values("Expected Return", ascending=False)
+        df = pd.DataFrame(rows).sort_values("Exp. Annual Return", ascending=False)
         st.dataframe(df, use_container_width=True)
 
 st.caption("Method: Convex trend filtering. Recommendation = ticker with highest historical return for its current regime.")
