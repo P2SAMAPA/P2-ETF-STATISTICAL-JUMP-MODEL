@@ -1,5 +1,6 @@
 """
 Statistical Jump Model via convex relaxation (fused LASSO + persistence).
+Uses SCS solver (included with cvxpy).
 """
 
 import numpy as np
@@ -18,11 +19,10 @@ class StatisticalJumpModel:
         self.durations_ = None
 
     def fit(self, y):
-        # Import cvxpy inside method to ensure it's loaded
         try:
             import cvxpy as cp
         except ImportError:
-            raise ImportError("cvxpy is required for SJM. Install with: pip install cvxpy")
+            raise ImportError("cvxpy is required. Install with: pip install cvxpy")
 
         T = len(y)
         mu = cp.Variable(T)
@@ -45,7 +45,8 @@ class StatisticalJumpModel:
 
         objective = loss + persist + regime
         problem = cp.Problem(cp.Minimize(objective))
-        problem.solve(solver=cp.ECOS, verbose=False)
+        # Use SCS solver instead of ECOS (more likely to be installed)
+        problem.solve(solver=cp.SCS, verbose=False)
 
         self.mu_ = mu.value
         self.log_sigma_ = log_sigma.value
