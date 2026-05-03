@@ -42,24 +42,19 @@ st.sidebar.write(f"**Next trading day:** {next_trading_day()}")
 
 universes = data['universes']
 
-# For each universe, compute a recommendation score
+# Score function
+def compute_score(info):
+    avg_dur = max(info["average_duration_days"], 1)
+    curr_dur = max(info["current_duration_days"], 1)
+    return info["current_regime"] * (1 + np.log(curr_dur / avg_dur))
+
 recommendations = {}
 for universe_name, uni_data in universes.items():
     if not uni_data:
         continue
-    best_ticker = None
-    best_score = -np.inf
-    best_info = None
-    for ticker, info in uni_data.items():
-        avg_dur = max(info["average_duration_days"], 1)
-        curr_dur = max(info["current_duration_days"], 1)
-        score = info["current_regime"] * (1 + np.log(curr_dur / avg_dur))
-        if score > best_score:
-            best_score = score
-            best_ticker = ticker
-            best_info = info
-    if best_ticker:
-        recommendations[universe_name] = (best_ticker, best_info, best_score)
+    best_ticker = max(uni_data.items(), key=lambda x: compute_score(x[1]))
+    best_score = compute_score(best_ticker[1])
+    recommendations[universe_name] = (best_ticker[0], best_ticker[1], best_score)
 
 st.header("🎯 Top ETF Recommendation for Next Trading Day")
 for universe, (ticker, info, score) in recommendations.items():
@@ -70,25 +65,29 @@ for universe, (ticker, info, score) in recommendations.items():
     col3.metric("Regime Duration (days)", info["current_duration_days"])
     st.caption(f"Regime strength score: {score:.2f} (higher = stronger buy signal)")
 
-    # Timeline plot with unique key
+    # Timeline plot with dates
+    dates = pd.to_datetime(info["dates"])
     regime_seq = info["regime_sequence"]
     fig = go.Figure()
     fig.add_trace(go.Scatter(
+        x=dates,
         y=regime_seq,
         mode='lines+markers',
         name='Regime',
-        line=dict(color='firebrick', width=2)
+        line=dict(color='firebrick', width=2),
+        marker=dict(size=3)
     ))
     fig.update_layout(
         title=f"Regime timeline – {ticker}",
-        xaxis_title="Time (past to present)",
+        xaxis_title="Date",
         yaxis_title="Regime (0=low, 1=mid, 2=high)",
-        height=300
+        height=400,
+        xaxis=dict(tickformat="%Y", dtick="M12")  # show years
     )
     st.plotly_chart(fig, use_container_width=True, key=f"regime_plot_{universe}")
     st.divider()
 
-# Optional: show full table for debugging
+# Optional: full table
 with st.expander("📋 Full Table (All Tickers)"):
     for universe_name, uni_data in universes.items():
         if not uni_data:
@@ -106,4 +105,4 @@ with st.expander("📋 Full Table (All Tickers)"):
         df = pd.DataFrame(rows).sort_values("Current Regime", ascending=False)
         st.dataframe(df, use_container_width=True)
 
-st.caption("Method: Convex trend filtering with persistence penalty. Recommendation = highest current regime × duration score.")
+st.caption("Method: Convex trend filtering with persistence penalty. Recommendation = highest current regime × log duration score.")
