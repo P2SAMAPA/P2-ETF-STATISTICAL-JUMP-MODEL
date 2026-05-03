@@ -95,8 +95,9 @@ def fmt_return(val: float) -> str:
 st.markdown("# 📊 Statistical Jump Model")
 st.caption(
     "Convex trend filtering detects persistent volatility regimes · "
-    "Regimes labelled Low / Mid / High by annualised median return · "
-    "Rankings by current regime expected return"
+    "Regimes labelled Low / Mid / High by geometrically compounded annualised return · "
+    "Returns are historical medians within each regime — not forecasts · "
+    "Rankings by current regime historical return"
 )
 
 data = load_latest()
@@ -211,7 +212,9 @@ for tab, universe_name in zip(tabs, universes):
                     paper_bgcolor="rgba(0,0,0,0)",
                     legend=dict(orientation="h", yanchor="bottom", y=1.02),
                 )
-                st.plotly_chart(fig_hero, use_container_width=True)
+                st.plotly_chart(
+                    fig_hero, use_container_width=True, key=f"hero_{universe_name}"
+                )
 
         st.divider()
 
@@ -270,7 +273,9 @@ for tab, universe_name in zip(tabs, universes):
                 paper_bgcolor="rgba(0,0,0,0)",
                 showlegend=False,
             )
-            st.plotly_chart(fig_bar, use_container_width=True)
+            st.plotly_chart(
+                fig_bar, use_container_width=True, key=f"bar_{universe_name}"
+            )
 
         with table_col:
             st.dataframe(
@@ -310,7 +315,7 @@ for tab, universe_name in zip(tabs, universes):
             plot_bgcolor="rgba(0,0,0,0)",
             paper_bgcolor="rgba(0,0,0,0)",
         )
-        st.plotly_chart(fig_heat, use_container_width=True)
+        st.plotly_chart(fig_heat, use_container_width=True, key=f"heat_{universe_name}")
 
         # ── Per-ticker detail ─────────────────────────────────────────────────
         st.subheader("🔬 Per-Ticker Regime Timeline")
@@ -353,7 +358,11 @@ for tab, universe_name in zip(tabs, universes):
                         legend=dict(orientation="h", yanchor="bottom", y=1.02),
                         xaxis=dict(tickformat="%Y"),
                     )
-                    st.plotly_chart(fig_t, use_container_width=True)
+                    st.plotly_chart(
+                        fig_t,
+                        use_container_width=True,
+                        key=f"detail_{universe_name}_{ticker}",
+                    )
 
                 d1, d2, d3 = st.columns(3)
                 d1.metric("Duration", f"{info.get('current_duration_days', 0)} days")
