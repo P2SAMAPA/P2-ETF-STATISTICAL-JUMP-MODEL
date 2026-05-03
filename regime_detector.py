@@ -4,6 +4,7 @@ Uses rolling volatility to standardise returns.
 """
 
 import numpy as np
+import pandas as pd
 import cvxpy as cp
 from sklearn.cluster import KMeans
 
@@ -24,7 +25,7 @@ class StatisticalJumpModel:
         y : 1D array of log returns
         """
         # Compute rolling volatility and standardise
-        vol = pd.Series(y).rolling(self.vol_window).std().fillna(method='bfill').values
+        vol = pd.Series(y).rolling(self.vol_window).std().bfill().values
         # Avoid zero vol
         vol = np.maximum(vol, 1e-6)
         y_std = y / vol
