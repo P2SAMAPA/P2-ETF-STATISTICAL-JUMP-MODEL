@@ -1,6 +1,6 @@
 """
 Main trainer: for each universe, for each ticker, fit SJM and collect results.
-Also computes average return per regime for return chasing.
+Computes annualised simple return per regime (mean daily return × 252).
 """
 
 import pandas as pd
@@ -20,7 +20,7 @@ def main():
 
     for universe_name, tickers in config.UNIVERSES.items():
         print(f"\n=== Universe: {universe_name} ===")
-        returns = data_manager.prepare_returns_matrix(df, tickers)
+        returns = data_manager.prepare_returns_matrix(df, tickers)  # log returns
         if returns.empty:
             continue
 
@@ -40,13 +40,14 @@ def main():
             )
             model.fit(series.values)
 
-            # Compute average return per regime (annualised, simple)
+            # Compute average simple return per regime (annualised)
+            simple_returns = np.exp(series.values) - 1.0   # convert log to simple
             regime_returns = {}
             for regime_id in set(model.regime_labels_):
                 mask = model.regime_labels_ == regime_id
-                avg_daily = series.values[mask].mean()
-                # Annualise (252 trading days)
-                annual_return = (1 + avg_daily) ** 252 - 1
+                avg_daily_simple = simple_returns[mask].mean()
+                # Annualise: multiply by 252 trading days
+                annual_return = avg_daily_simple * 252
                 regime_returns[int(regime_id)] = annual_return
 
             # Build output
@@ -63,7 +64,7 @@ def main():
                 "regime_sequence": [int(l) for l in model.regime_labels_],
                 "dates": [d.strftime("%Y-%m-%d") for d in series.index],
                 "transition_points": transitions_dates,
-                "regime_returns": regime_returns   # new field
+                "regime_returns": regime_returns
             }
 
         all_results[universe_name] = universe_results
