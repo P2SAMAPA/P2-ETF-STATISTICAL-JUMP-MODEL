@@ -126,13 +126,17 @@ class StatisticalJumpModel:
         # Durations
         self.durations_ = [merged[i + 1] - merged[i] for i in range(n_segs)]
 
-        # Annualised median return per regime label
+        # Annualised return per regime — geometric compounding of median daily return
+        # Uses mean of log returns (unbiased for compounding) then converts to simple
         for reg_id in range(self.n_regimes):
             mask = self.regime_labels_ == reg_id
             if mask.any():
-                self.regime_return_map_[reg_id] = float(
-                    np.median(simple_returns[mask]) * 252
-                )
+                # Use log returns for geometric compounding (y is already log returns)
+                median_log = float(np.median(y[mask]))
+                # Geometric annual: (1 + r_daily)^252 - 1, computed via log
+                ann_log = median_log * 252
+                ann_simple = float(np.expm1(ann_log))
+                self.regime_return_map_[reg_id] = ann_simple
             else:
                 self.regime_return_map_[reg_id] = 0.0
 
@@ -143,8 +147,8 @@ class StatisticalJumpModel:
     def _assign_single_regime(self, y: np.ndarray, T: int) -> None:
         self.regime_labels_ = np.zeros(T, dtype=int)
         self.durations_ = [T]
-        simple = np.expm1(y)
-        self.regime_return_map_ = {0: float(np.median(simple) * 252)}
+        ann_simple = float(np.expm1(np.median(y) * 252))
+        self.regime_return_map_ = {0: ann_simple}
 
     def get_current_regime(self) -> int:
         return int(self.regime_labels_[-1]) if self.regime_labels_ is not None else 0
