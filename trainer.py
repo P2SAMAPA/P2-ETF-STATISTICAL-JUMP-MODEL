@@ -34,14 +34,14 @@ def main():
                 lambda_pen=config.LAMBDA,
                 gamma_persist=config.GAMMA,
                 min_regime_days=config.MIN_REGIME_DAYS,
-                transition_threshold=config.TRANSITION_THRESHOLD
+                transition_threshold=config.TRANSITION_THRESHOLD,
+                vol_window=config.VOL_WINDOW
             )
             model.fit(series)
 
             # Build output for this ticker
             transitions_dates = []
             for idx, new_reg in model.get_transitions():
-                # Convert index to date string
                 date = returns.index[idx].strftime("%Y-%m-%d")
                 transitions_dates.append({"date": date, "new_regime": int(new_reg)})
 
