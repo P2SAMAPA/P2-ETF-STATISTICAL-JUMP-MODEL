@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import json
-import numpy as np  # <-- ADDED
+import numpy as np
 import plotly.graph_objects as go
 from huggingface_hub import HfFileSystem
 import config
@@ -43,16 +43,16 @@ st.sidebar.write(f"**Next trading day:** {next_trading_day()}")
 universes = data['universes']
 
 # For each universe, compute a recommendation score
-# Score = current_regime * (1 + log(current_duration / max(1, avg_duration)))
 recommendations = {}
 for universe_name, uni_data in universes.items():
+    if not uni_data:
+        continue
     best_ticker = None
     best_score = -np.inf
     best_info = None
     for ticker, info in uni_data.items():
         avg_dur = max(info["average_duration_days"], 1)
         curr_dur = max(info["current_duration_days"], 1)
-        # Avoid log(0) or log(negative)
         score = info["current_regime"] * (1 + np.log(curr_dur / avg_dur))
         if score > best_score:
             best_score = score
@@ -70,7 +70,7 @@ for universe, (ticker, info, score) in recommendations.items():
     col3.metric("Regime Duration (days)", info["current_duration_days"])
     st.caption(f"Regime strength score: {score:.2f} (higher = stronger buy signal)")
 
-    # Show timeline plot for this ticker
+    # Timeline plot with unique key
     regime_seq = info["regime_sequence"]
     fig = go.Figure()
     fig.add_trace(go.Scatter(
@@ -85,12 +85,14 @@ for universe, (ticker, info, score) in recommendations.items():
         yaxis_title="Regime (0=low, 1=mid, 2=high)",
         height=300
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key=f"regime_plot_{universe}")
     st.divider()
 
 # Optional: show full table for debugging
 with st.expander("📋 Full Table (All Tickers)"):
     for universe_name, uni_data in universes.items():
+        if not uni_data:
+            continue
         st.subheader(universe_name)
         rows = []
         for ticker, info in uni_data.items():
