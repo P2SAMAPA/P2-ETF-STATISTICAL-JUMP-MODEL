@@ -40,54 +40,67 @@ st.sidebar.write(f"**Run date:** {data['run_date']}")
 st.sidebar.write(f"**Next trading day:** {next_trading_day()}")
 
 universes = data['universes']
-selected_universe = st.selectbox("Select Universe", list(universes.keys()))
-uni_data = universes[selected_universe]
 
-if uni_data:
-    # Convert to DataFrame for easy display
-    rows = []
+# For each universe, compute a recommendation score
+# Score = current_regime * (1 + log(current_duration / avg_duration))
+# This favours high‑regime states that have lasted longer than average
+recommendations = {}
+for universe_name, uni_data in universes.items():
+    best_ticker = None
+    best_score = -np.inf
+    best_info = None
     for ticker, info in uni_data.items():
-        rows.append({
-            "Ticker": ticker,
-            "Current Regime": info["current_regime"],
-            "Current Duration (days)": info["current_duration_days"],
-            "Avg Regime Duration": info["average_duration_days"],
-            "Total Regimes": info["total_regimes"]
-        })
-    df = pd.DataFrame(rows).sort_values("Current Regime", ascending=False)
+        # Avoid division by zero
+        avg_dur = max(info["average_duration_days"], 1)
+        score = info["current_regime"] * (1 + np.log(info["current_duration_days"] / avg_dur))
+        if score > best_score:
+            best_score = score
+            best_ticker = ticker
+            best_info = info
+    if best_ticker:
+        recommendations[universe_name] = (best_ticker, best_info, best_score)
 
-    st.subheader("📈 Current Regime Status for Next Trading Day")
-    st.dataframe(df, use_container_width=True)
+st.header("🎯 Top ETF Recommendation for Next Trading Day")
+for universe, (ticker, info, score) in recommendations.items():
+    st.markdown(f"### {universe}")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("ETF", ticker)
+    col2.metric("Current Regime", info["current_regime"])
+    col3.metric("Regime Duration (days)", info["current_duration_days"])
+    st.caption(f"Regime strength score: {score:.2f} (higher = stronger buy signal)")
 
-    # Detailed view for selected ticker
-    selected_ticker = st.selectbox("View details for ticker", df["Ticker"].tolist())
-    if selected_ticker:
-        info = uni_data[selected_ticker]
-        st.subheader(f"Regime Timeline – {selected_ticker}")
-        # Plot regime sequence
-        fig = go.Figure()
-        regime_seq = info["regime_sequence"]
-        fig.add_trace(go.Scatter(
-            y=regime_seq,
-            mode='lines+markers',
-            name='Regime',
-            line=dict(color='firebrick', width=2)
-        ))
-        fig.update_layout(
-            title=f"Regime labels over time",
-            xaxis_title="Time step (past to present)",
-            yaxis_title="Regime (0=low,1=mid,2=high)",
-            height=400
-        )
-        st.plotly_chart(fig, use_container_width=True)
+    # Show timeline plot for this ticker
+    regime_seq = info["regime_sequence"]
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        y=regime_seq,
+        mode='lines+markers',
+        name='Regime',
+        line=dict(color='firebrick', width=2)
+    ))
+    fig.update_layout(
+        title=f"Regime timeline – {ticker}",
+        xaxis_title="Time (past to present)",
+        yaxis_title="Regime (0=low, 1=mid, 2=high)",
+        height=300
+    )
+    st.plotly_chart(fig, use_container_width=True)
+    st.divider()
 
-        st.subheader("🔄 Transition Points")
-        trans_df = pd.DataFrame(info["transition_points"])
-        if not trans_df.empty:
-            st.dataframe(trans_df)
-        else:
-            st.write("No regime changes detected.")
-else:
-    st.info("No data for this universe.")
+# Optional: show full table for debugging
+with st.expander("📋 Full Table (All Tickers)"):
+    for universe_name, uni_data in universes.items():
+        st.subheader(universe_name)
+        rows = []
+        for ticker, info in uni_data.items():
+            rows.append({
+                "Ticker": ticker,
+                "Current Regime": info["current_regime"],
+                "Current Duration": info["current_duration_days"],
+                "Avg Duration": info["average_duration_days"],
+                "Total Regimes": info["total_regimes"]
+            })
+        df = pd.DataFrame(rows).sort_values("Current Regime", ascending=False)
+        st.dataframe(df, use_container_width=True)
 
-st.caption("Method: Convex relaxation of piecewise constant mean + persistence penalty. See Nystrup et al. (2020)")
+st.caption("Method: Convex trend filtering with persistence penalty. Recommendation = highest current regime × duration score.")
