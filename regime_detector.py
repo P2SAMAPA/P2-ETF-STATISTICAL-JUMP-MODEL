@@ -1,10 +1,10 @@
 """
 Statistical Jump Model via convex relaxation (fused LASSO + persistence).
-Uses cvxpy.
+Uses cvxpy – ensure it is installed.
 """
 
 import numpy as np
-import cvxpy as cp
+import cvxpy as cp   # <-- must be at top
 from sklearn.cluster import KMeans
 
 class StatisticalJumpModel:
@@ -94,9 +94,8 @@ class StatisticalJumpModel:
 
     def get_transitions(self):
         """Return list of (date_index, new_regime) for each changepoint."""
-        # We'll store indices, then map to dates in trainer
         transitions = []
-        for i, cp in enumerate(self.changepoints_):
-            new_regime = self.regime_labels_[cp] if cp < len(self.regime_labels_) else None
-            transitions.append((cp, new_regime))
+        for i, idx in enumerate(self.changepoints_):
+            new_regime = self.regime_labels_[idx] if idx < len(self.regime_labels_) else None
+            transitions.append((idx, new_regime))
         return transitions
