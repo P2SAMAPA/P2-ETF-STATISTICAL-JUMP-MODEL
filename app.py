@@ -26,7 +26,13 @@ def load_latest():
             return None
         latest = max(json_files)
         with fs.open(latest, "r") as fp:
-            return json.load(fp)
+            data = json.load(fp)
+            # If "regime_returns" missing, add placeholder to avoid errors
+            for uni, uni_data in data.get("universes", {}).items():
+                for ticker, info in uni_data.items():
+                    if "regime_returns" not in info:
+                        info["regime_returns"] = {}
+            return data
     except Exception as e:
         st.error(f"Error: {e}")
         return None
@@ -40,7 +46,10 @@ st.sidebar.header("ℹ️ Info")
 st.sidebar.write(f"**Run date:** {data['run_date']}")
 st.sidebar.write(f"**Next trading day:** {next_trading_day()}")
 
-universes = data['universes']
+universes = data.get("universes", {})
+if not universes:
+    st.warning("No universe data found.")
+    st.stop()
 
 # For each universe, pick ticker with highest expected return from its current regime
 recommendations = {}
@@ -51,46 +60,52 @@ for universe_name, uni_data in universes.items():
     best_expected_return = -np.inf
     best_info = None
     for ticker, info in uni_data.items():
-        curr_reg = info["current_regime"]
-        exp_return = info.get("regime_returns", {}).get(curr_reg, -np.inf)
+        curr_reg = info.get("current_regime")
+        regime_returns = info.get("regime_returns", {})
+        exp_return = regime_returns.get(curr_reg, -np.inf)
         if exp_return > best_expected_return:
             best_expected_return = exp_return
             best_ticker = ticker
             best_info = info
-    if best_ticker:
+    if best_ticker is not None:
         recommendations[universe_name] = (best_ticker, best_info, best_expected_return)
+    else:
+        # Fallback: pick first ticker
+        ticker = list(uni_data.keys())[0]
+        recommendations[universe_name] = (ticker, uni_data[ticker], 0.0)
 
 st.header("🎯 Top ETF Recommendation for Next Trading Day")
+
 for universe, (ticker, info, exp_return) in recommendations.items():
     st.markdown(f"### {universe}")
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("ETF", ticker)
-    col2.metric("Current Regime", info["current_regime"])
-    col3.metric("Regime Duration (days)", info["current_duration_days"])
-    # Display percentage with 2 decimal places (e.g., 0.05%)
+    col2.metric("Current Regime", info.get("current_regime", "?"))
+    col3.metric("Regime Duration (days)", info.get("current_duration_days", 0))
     col4.metric("Expected Annual Return", f"{exp_return*100:.2f}%")
     st.caption("Annualised simple return (mean daily × 252) for the current regime.")
 
     # Timeline plot with dates
-    dates = pd.to_datetime(info["dates"])
-    regime_seq = info["regime_sequence"]
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=dates,
-        y=regime_seq,
-        mode='lines+markers',
-        name='Regime',
-        line=dict(color='firebrick', width=2),
-        marker=dict(size=3)
-    ))
-    fig.update_layout(
-        title=f"Regime timeline – {ticker}",
-        xaxis_title="Date",
-        yaxis_title="Regime (0=low, 1=mid, 2=high)",
-        height=400,
-        xaxis=dict(tickformat="%Y", dtick="M12")
-    )
-    st.plotly_chart(fig, use_container_width=True, key=f"regime_plot_{universe}")
+    dates = pd.to_datetime(info.get("dates", []))
+    regime_seq = info.get("regime_sequence", [])
+    if len(dates) > 0 and len(regime_seq) > 0:
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=dates,
+            y=regime_seq,
+            mode='lines+markers',
+            name='Regime',
+            line=dict(color='firebrick', width=2),
+            marker=dict(size=3)
+        ))
+        fig.update_layout(
+            title=f"Regime timeline – {ticker}",
+            xaxis_title="Date",
+            yaxis_title="Regime (0=low, 1=mid, 2=high)",
+            height=400,
+            xaxis=dict(tickformat="%Y", dtick="M12")
+        )
+        st.plotly_chart(fig, use_container_width=True, key=f"regime_plot_{universe}")
     st.divider()
 
 # Optional full table
@@ -101,14 +116,15 @@ with st.expander("📋 Full Table (All Tickers)"):
         st.subheader(universe_name)
         rows = []
         for ticker, info in uni_data.items():
-            curr_reg = info["current_regime"]
-            exp_return = info.get("regime_returns", {}).get(curr_reg, 0.0)
+            curr_reg = info.get("current_regime")
+            regime_returns = info.get("regime_returns", {})
+            exp_return = regime_returns.get(curr_reg, 0.0)
             rows.append({
                 "Ticker": ticker,
                 "Current Regime": curr_reg,
-                "Current Duration": info["current_duration_days"],
+                "Current Duration": info.get("current_duration_days", 0),
                 "Exp. Annual Return": f"{exp_return*100:.2f}%",
-                "Total Regimes": info["total_regimes"]
+                "Total Regimes": info.get("total_regimes", 0)
             })
         df = pd.DataFrame(rows).sort_values("Exp. Annual Return", ascending=False)
         st.dataframe(df, use_container_width=True)
