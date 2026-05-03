@@ -25,14 +25,12 @@ UNIVERSES = {
     "COMBINED": ALL_TICKERS
 }
 
-# Which series to model? "returns", "volatility", or "macro"
-SERIES_TYPE = "returns"   # we will use ETF log‑returns
-
-# SJM hyperparameters (to be tuned)
-LAMBDA = 0.1      # penalty for second difference (regime changes)
-GAMMA = 1.0       # penalty for first difference (persistence)
-MIN_REGIME_DAYS = 60   # minimum duration to consider a regime valid
-TRANSITION_THRESHOLD = 0.5  # how many std devs to call a jump
+# SJM hyperparameters – tuned for long, persistent regimes
+LAMBDA = 10.0          # penalty for second difference (regime changes)
+GAMMA = 20.0           # penalty for first difference (short regimes)
+MIN_REGIME_DAYS = 60   # any regime shorter than this will be merged
+TRANSITION_THRESHOLD = 0.5   # std dev threshold for changepoint detection
+VOL_WINDOW = 30        # rolling volatility window (days)
 
 # Output
 TODAY = datetime.now().strftime("%Y-%m-%d")
