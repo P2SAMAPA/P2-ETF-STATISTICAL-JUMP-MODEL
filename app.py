@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import json
+import numpy as np  # <-- ADDED
 import plotly.graph_objects as go
 from huggingface_hub import HfFileSystem
 import config
@@ -42,17 +43,17 @@ st.sidebar.write(f"**Next trading day:** {next_trading_day()}")
 universes = data['universes']
 
 # For each universe, compute a recommendation score
-# Score = current_regime * (1 + log(current_duration / avg_duration))
-# This favours high‑regime states that have lasted longer than average
+# Score = current_regime * (1 + log(current_duration / max(1, avg_duration)))
 recommendations = {}
 for universe_name, uni_data in universes.items():
     best_ticker = None
     best_score = -np.inf
     best_info = None
     for ticker, info in uni_data.items():
-        # Avoid division by zero
         avg_dur = max(info["average_duration_days"], 1)
-        score = info["current_regime"] * (1 + np.log(info["current_duration_days"] / avg_dur))
+        curr_dur = max(info["current_duration_days"], 1)
+        # Avoid log(0) or log(negative)
+        score = info["current_regime"] * (1 + np.log(curr_dur / avg_dur))
         if score > best_score:
             best_score = score
             best_ticker = ticker
