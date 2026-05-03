@@ -1,6 +1,6 @@
 """
 Main trainer: for each universe, for each ticker, fit SJM and collect results.
-Computes annualised simple return per regime (mean daily return × 252).
+Uses median simple return per regime (robust against cancellation).
 """
 
 import pandas as pd
@@ -42,15 +42,14 @@ def main():
 
             # Convert log returns to simple returns
             simple_returns = np.exp(series.values) - 1.0
-            # Compute average simple return per regime (annualised)
+            # Compute median simple return per regime (annualised)
             regime_returns = {}
             for regime_id in set(model.regime_labels_):
                 mask = model.regime_labels_ == regime_id
-                avg_daily_simple = simple_returns[mask].mean()
-                # Annualise: multiply by 252 (trading days)
-                annual_return = avg_daily_simple * 252.0
+                median_daily = np.median(simple_returns[mask])
+                annual_return = median_daily * 252.0
                 regime_returns[int(regime_id)] = float(annual_return)
-                print(f"      Regime {regime_id}: avg daily simple = {avg_daily_simple:.6f}, annual = {annual_return:.4f}")
+                print(f"      Regime {regime_id}: median daily simple = {median_daily:.6f}, annual = {annual_return:.4f}")
 
             # Build output
             transitions_dates = []
