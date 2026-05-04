@@ -161,13 +161,15 @@ for tab, universe_name in zip(tabs, universes):
             m4.metric("# Changepoints", top_info.get("n_changepoints", 0))
 
             # Regime return table for top ticker
-            reg_returns = top_info.get("regime_returns", {})
-            reg_names = top_info.get("regime_names", {})
+            reg_returns = {
+                int(k): v for k, v in top_info.get("regime_returns", {}).items()
+            }
+            reg_names = {int(k): v for k, v in top_info.get("regime_names", {}).items()}
             if reg_returns:
                 st.markdown("**Return by Regime**")
                 reg_rows = [
                     {
-                        "Regime": f"{reg_names.get(int(k), k)} {'◄ current' if int(k) == curr_regime else ''}",
+                        "Regime": f"{reg_names.get(k, str(k))} {'◄ current' if k == curr_regime else ''}",
                         "Annualised Return": fmt_return(v),
                     }
                     for k, v in sorted(reg_returns.items())
@@ -233,9 +235,21 @@ for tab, universe_name in zip(tabs, universes):
                     "Duration (days)": info.get("current_duration_days", 0),
                     "Avg Duration": info.get("average_duration_days", 0),
                     "Changepoints": info.get("n_changepoints", 0),
-                    "Low Ret": fmt_return(info.get("regime_returns", {}).get(0, 0)),
-                    "Mid Ret": fmt_return(info.get("regime_returns", {}).get(1, 0)),
-                    "High Ret": fmt_return(info.get("regime_returns", {}).get(2, 0)),
+                    "Low Ret": fmt_return(
+                        {
+                            int(k): v for k, v in info.get("regime_returns", {}).items()
+                        }.get(0, 0)
+                    ),
+                    "Mid Ret": fmt_return(
+                        {
+                            int(k): v for k, v in info.get("regime_returns", {}).items()
+                        }.get(1, 0)
+                    ),
+                    "High Ret": fmt_return(
+                        {
+                            int(k): v for k, v in info.get("regime_returns", {}).items()
+                        }.get(2, 0)
+                    ),
                 }
             )
         ranks_df = pd.DataFrame(rank_rows)
@@ -290,7 +304,8 @@ for tab, universe_name in zip(tabs, universes):
         heat_tickers = [t for t, _ in sorted_tickers]
         heat_data = []
         for _, info in sorted_tickers:
-            rr = info.get("regime_returns", {})
+            # JSON deserialises int keys as strings — normalise to int
+            rr = {int(k): v for k, v in info.get("regime_returns", {}).items()}
             heat_data.append(
                 [rr.get(0, 0) * 100, rr.get(1, 0) * 100, rr.get(2, 0) * 100]
             )
@@ -371,12 +386,12 @@ for tab, universe_name in zip(tabs, universes):
                 )
                 d3.metric("Changepoints", info.get("n_changepoints", 0))
 
-                rr = info.get("regime_returns", {})
-                rn = info.get("regime_names", {})
+                rr = {int(k): v for k, v in info.get("regime_returns", {}).items()}
+                rn = {int(k): v for k, v in info.get("regime_names", {}).items()}
                 if rr:
                     ret_rows = [
                         {
-                            "Regime": f"{rn.get(int(k), k)}{'  ◄ current' if int(k) == curr else ''}",
+                            "Regime": f"{rn.get(k, str(k))}{'  ◄ current' if k == curr else ''}",
                             "Ann. Return": fmt_return(v),
                         }
                         for k, v in sorted(rr.items())
