@@ -126,17 +126,28 @@ class StatisticalJumpModel:
         # Durations
         self.durations_ = [merged[i + 1] - merged[i] for i in range(n_segs)]
 
-        # Annualised return per regime — geometric compounding of median daily return
-        # Uses mean of log returns (unbiased for compounding) then converts to simple
+        # Annualised return per regime.
+        # Use 21-day (monthly) rolling compounded returns, then take median across
+        # all such windows that fall inside this regime, then annualise × 12.
+        # This avoids the explosion that occurs when compounding daily log returns
+        # over 252 periods for high-momentum ETFs.
+        log_series = pd.Series(y)
+        # 21-day compounded log return for each ending day
+        rolling_log_21 = log_series.rolling(21).sum()  # sum of log = compound
+        rolling_simple_21 = rolling_log_21.apply(np.expm1)  # to simple return
+
         for reg_id in range(self.n_regimes):
             mask = self.regime_labels_ == reg_id
             if mask.any():
-                # Use log returns for geometric compounding (y is already log returns)
-                median_log = float(np.median(y[mask]))
-                # Geometric annual: (1 + r_daily)^252 - 1, computed via log
-                ann_log = median_log * 252
-                ann_simple = float(np.expm1(ann_log))
-                self.regime_return_map_[reg_id] = ann_simple
+                regime_monthly = rolling_simple_21.values[mask]
+                regime_monthly = regime_monthly[np.isfinite(regime_monthly)]
+                if len(regime_monthly) > 0:
+                    median_monthly = float(np.median(regime_monthly))
+                    # Annualise: (1 + r_monthly)^12 - 1
+                    ann_return = float((1 + median_monthly) ** 12 - 1)
+                    self.regime_return_map_[reg_id] = ann_return
+                else:
+                    self.regime_return_map_[reg_id] = 0.0
             else:
                 self.regime_return_map_[reg_id] = 0.0
 
@@ -147,7 +158,10 @@ class StatisticalJumpModel:
     def _assign_single_regime(self, y: np.ndarray, T: int) -> None:
         self.regime_labels_ = np.zeros(T, dtype=int)
         self.durations_ = [T]
-        ann_simple = float(np.expm1(np.median(y) * 252))
+        rolling_log_21 = pd.Series(y).rolling(21).sum()
+        monthly = rolling_log_21.apply(np.expm1).dropna()
+        median_monthly = float(np.median(monthly)) if len(monthly) > 0 else 0.0
+        ann_simple = float((1 + median_monthly) ** 12 - 1)
         self.regime_return_map_ = {0: ann_simple}
 
     def get_current_regime(self) -> int:
