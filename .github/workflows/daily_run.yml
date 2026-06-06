@@ -2,7 +2,7 @@ name: Daily SJM Analysis
 
 on:
   schedule:
-    - cron: "10 03 * * *"  # Daily at 04:00 UTC
+    - cron: "50 03 * * *"  # Daily at 04:00 UTC
   workflow_dispatch:
     inputs:
       universe:
